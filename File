@@ -1,0 +1,523 @@
+---
+
+title: "Prediction of Medical Expenses of Individuals using Regression Models"
+
+author: "Parvez Khan"
+
+output:
+
+  word_document:
+
+    toc: true
+
+  html_document: 
+
+    highlight: haddock
+
+    toc: true
+
+  pdf_document:
+
+    toc: true
+
+---
+
+
+
+### Dataset
+
+Here we have a dataset about medical costs billed by health insurance on different individuals along with their age, sex, bmi, number of children and other parameters collected from [kaggle database](https://www.kaggle.com/datasets/mirichoi0218/insurance/data).
+
+
+
+### Objective
+
+To predict the medical bill for individuals based on different parameters using different regression models and choose the best among them.
+
+
+
+### Data description
+
+Loading the data
+
+```{r}
+
+data <- read.csv("insurance.csv", header = TRUE)
+
+```
+
+Checking for number of rows and columns
+
+```{r}
+
+dim(data)
+
+```
+
+Taking a look at the data frame
+
+
+
+```{r}
+
+head(data)
+
+str(data)
+
+```
+
+### Data Cleaning
+
+Checking for missing values
+
+
+
+```{r}
+
+missing <- sum(is.na(data))
+
+missing
+
+```
+
+**Comment:** There is no missing value in the data.
+
+
+
+Checking for duplicate values
+
+
+
+```{r}
+
+duplicate_rows <- data[duplicated(data),]
+
+duplicate_rows
+
+```
+
+**Comment:** There is one duplicate row, so we remove it from the data.
+
+
+
+```{r}
+
+data <- data[!duplicated(data),]
+
+```
+
+
+
+### Data Visualization
+
+To start with data visualization we first plot histograms for the numeric columns
+
+```{r}
+
+hist(data$age, main = "Age Distribution", xlab = "Age", ylab = "Frequency", col = "skyblue")
+
+hist(data$bmi, main = "BMI Distribution", xlab = "BMI", ylab = "Frequency", col = "skyblue")
+
+hist(data$charges, main = "Charges Distribution", xlab = "Charges", ylab = "Frequency", col = "skyblue")
+
+```
+
+
+
+Now for the categorical columns first we will get the number of occurrence for each unique entries
+
+```{r}
+
+sex_count <- table(data$sex)
+
+sex_count
+
+children_count <- table(data$children)
+
+children_count
+
+smoker_count <- table(data$smoker)
+
+smoker_count
+
+region_count <- table(data$region)
+
+region_count
+
+```
+
+
+
+Now to visualize the distribution of categorical columns we will plot their bar graph
+
+```{r}
+
+barplot(sex_count, main = "Sex Distribution", xlab = "Sex", ylab = "Frequency", col = c("pink", "skyblue"))
+
+barplot(children_count, main = "Children Distribution", xlab = "Number of Children", ylab = "Frequency", col = "skyblue")
+
+barplot(smoker_count, main = "Smoker Distribution", xlab = "Smoker", ylab = "Frequency", col = c("grey", "black"))
+
+barplot(region_count, main = "Region Distribution", xlab = "Region", ylab = "Frequency", col = c("pink", "skyblue", "orange", "purple"))
+
+
+
+```
+
+
+
+Now we plot the boxplot for numerical columns to check for outliers
+
+```{r}
+
+boxplot(data$age, main = "Boxplot for Age", col = "skyblue")
+
+boxplot(data$bmi, main = "Boxplot for BMI", col = "skyblue")
+
+boxplot(data$charges, main = "Boxplot for Charges", col = "skyblue")
+
+```
+
+
+
+**Comment:** It is evident from the boxplot that bmi and chrages contains some outliers while there is no outliers on the age column.
+
+
+
+Now we plot a scatter diagram for further interpretation
+
+```{r}
+
+plot(data$age, data$charges, xlab = "Age", ylab = "Charges", col = "blue")
+
+plot(data$bmi, data$charges, xlab = "BMI", ylab = "Charges", col = "blue")
+
+```
+
+
+
+**Comment:** From the scatter plot it can be seen that their is a weak relation between age and charges while the relation is more weak between bmi and charges.
+
+
+
+Now we create a correlation matrix to further check for quantified relationship between the variables. 
+
+```{r}
+
+numeric_data <- data[, c("age", "bmi", "charges")]
+
+cor(numeric_data)
+
+```
+
+
+
+**Comment:** From the correlation matrix it is evident that the correlation between bmi and charges is very low while between age and charges it is slightly better.
+
+
+
+Now we see if the charges vary with different categories
+
+
+
+Charges for males and females:
+
+```{r}
+
+av_sex_charge <- tapply(data$charges, data$sex, mean)
+
+barplot(av_sex_charge, xlab = "Sex", ylab = "Average Charge", col = c("pink", "skyblue"))
+
+```
+
+
+
+**Comment:** As it can be seen there is not much difference in medical charge of male and female.
+
+
+
+Charges for different number children:
+
+```{r}
+
+av_children_charge <- tapply(data$charges, data$children, mean)
+
+barplot(av_children_charge, xlab = "Number of Children", ylab = "Average Charge", col = "skyblue")
+
+```
+
+
+
+**Comment:** From the plot we can see that the average charge is almost not very different among people with different number of children with an exception where surprisingly people with 5 children has less average medical charge.
+
+
+
+Charges for smokers and non-smokers:
+
+```{r}
+
+av_smoker_charge <- tapply(data$charges, data$smoker, mean)
+
+barplot(av_smoker_charge, xlab = "Smoker", ylab = "Average Charge", col = c("grey", "black"))
+
+```
+
+
+
+**Comment:** It is clearly evident from the plot that people who smoke tends to have a significantly higher average medical cost than people who don't.
+
+
+
+Charges for poeple of different regions:
+
+```{r}
+
+av_region_charge <- tapply(data$charges, data$region, mean)
+
+barplot(av_region_charge, xlab = "Region", ylab = "Average Charge", col = c("pink", "skyblue", "orange", "purple"))
+
+```
+
+
+
+**Comment:** Here also we see that there is not much difference in charges among people from different region.
+
+
+
+### Model Fitting
+
+Before we fit any model into the data, at first we need to change the categorical columns into numerical ones so that we can work with them with ease.
+
+```{r}
+
+data$sex <- as.numeric(factor(data$sex)) - 1
+
+data$smoker <- as.numeric(factor(data$smoker)) - 1
+
+data$region <- as.numeric(factor(data$region)) - 1
+
+head(data)
+
+```
+
+
+
+We have now changed the whole dataset into numerical data and can now proceed with model fitting.
+
+
+
+#### Split the data into training and testing
+
+Here we allocate 80% of the data for training and the remaining 20% goes for testing.
+
+
+
+```{r}
+
+set.seed(82)
+
+indices <- sample(nrow(data), 0.8*nrow(data))
+
+train_data <- data[indices, ]
+
+test_data <- data[-indices, ]
+
+```
+
+
+
+#### Linear Regression Model:
+
+
+
+```{r}
+
+lr_model <- lm(charges ~ ., data = train_data)
+
+summary(lr_model)
+
+```
+
+
+
+**Comment:** From the summary we can see that the p-value for the coefficient of the variable 'sex' is 0.96 which is significantly high(>>0.05), specifying that it doesn't affect the response variable 'charges'. So now we will rebuild the model dropping the variable 'sex'.
+
+
+
+```{r}
+
+lr_model2 <- lm(charges ~ . -sex, data = train_data)
+
+summary(lr_model2)
+
+```
+
+
+
+##### Model Accuracy Check:
+
+Now we will check the accuracy of the model and check how it performs with the test data
+
+
+
+```{r}
+
+lr_train_predicted <- predict(lr_model2, newdata = train_data)
+
+lr_test_predicted <- predict(lr_model2, newdata = test_data)
+
+
+
+rmse <- function(actual, predicted){
+
+  sqrt(mean((actual - predicted)^2))
+
+}
+
+
+
+rsquared <- function(actual, predicted){
+
+  sst <- sum((actual - mean(actual))^2)
+
+  ssr <- sum((actual - predicted)^2)
+
+  1 - (ssr/sst)
+
+}
+
+
+
+lr_rmse_train <- rmse(train_data$charges, lr_train_predicted)
+
+lr_rsquared_train <- rsquared(train_data$charges, lr_train_predicted)
+
+
+
+lr_rmse_test <- rmse(test_data$charges, lr_test_predicted)
+
+lr_rsquared_test <- rsquared(test_data$charges, lr_test_predicted)
+
+
+
+cat("Trainig RMSE: ", lr_rmse_train, "\nTraining R-squared: ", lr_rsquared_train, "\n\nTesting RMSE: ", lr_rmse_test, "\nTesting R-squared: ", lr_rsquared_test, "\n")
+
+```
+
+
+
+#### Decision Tree Regression Model:
+
+First we load the library 'rpart' to perform Decision Tree regression
+
+```{r}
+
+library(rpart)
+
+library(rpart.plot)
+
+```
+
+
+
+Now we train our decision tree model with the train data and visualize it
+
+```{r}
+
+dt_model <- rpart(charges ~ ., data = train_data, method = "anova")
+
+rpart.plot(dt_model, type = 3, main = "Decision Tree for Charge Prediction")
+
+
+
+```
+
+
+
+##### Model Accuracy Check:
+
+Now we check the performance of the model with the test data
+
+```{r}
+
+dt_train_predicted <- predict(dt_model, newdata = train_data)
+
+dt_test_predicted <- predict(dt_model, newdata = test_data)
+
+
+
+dt_rmse_train <- rmse(train_data$charges, dt_train_predicted)
+
+dt_rsquared_train <- rsquared(train_data$charges, dt_train_predicted)
+
+
+
+dt_rmse_test <- rmse(test_data$charges, dt_test_predicted)
+
+dt_rsquared_test <- rsquared(test_data$charges, dt_test_predicted)
+
+
+
+cat("Training RMSE: ", dt_rmse_train, "\nTraining R-squared: ", dt_rsquared_train, "\n\nTesting RMSE: ", dt_rmse_test, "\nTesting R-squared: ", dt_rsquared_test, "\n")
+
+```
+
+
+
+#### Random Forest Regression Model:
+
+First we load the library 'randomForest' to perform random forest regression
+
+```{r}
+
+library(randomForest)
+
+```
+
+
+
+Now we train the random forest model with the train data
+
+```{r}
+
+rf_model <- randomForest(charges ~ ., data = train_data)
+
+print(rf_model)
+
+
+
+```
+
+
+
+##### Model Accuracy Check
+
+```{r}
+
+rf_train_predicted <- predict(rf_model, newdata = train_data)
+
+rf_test_predicted <- predict(rf_model, newdata = test_data)
+
+
+
+rf_rmse_train <- rmse(train_data$charges, rf_train_predicted)
+
+rf_rsquared_train <- rsquared(train_data$charges, rf_train_predicted)
+
+
+
+rf_rmse_test <- rmse(test_data$charges, rf_test_predicted)
+
+rf_rsquared_test <- rsquared(test_data$charges, rf_test_predicted)
+
+
+
+cat("Training RMSE: ", rf_rmse_train, "\nTraining R-squared: ", rf_rsquared_train, "\n\nTesting RMSE: ", rf_rmse_test, "\nTesting R-squared: ", rf_rsquared_test, "\n")
+
+```
+
+
+
+### Conclusion 
+
+After fitting and checking the performance of all the models, We can see that the accuracy in training is 74%, 83%, and 93% for linear regression, decision tree and random forest model respectively, specifying the superiority of the random forest model over the other two models while training with the train data. On the other hand in terms of predicting, the accuracy of the linear regression model and the decision tree model slightly increases to 77% and 86% respectively, while the accuracy of the random forest model decreases to 87% which is still better than the other two models. So we come to the conclusion that **Random Forest Model** is the best among all the models.
